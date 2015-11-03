@@ -229,36 +229,11 @@ Legend.generateLegendHTML = function(g, x, sel_points, oneEmWidth, row) {
   // If no points are selected, we display a default legend. Traditionally,
   // this has been blank. But a better default would be a conventional legend,
   // which provides essential information for a non-interactive chart.
-  var html, sepLines, i, dash, strokePattern;
+  var html, sepLines, i, j, dash, strokePattern;
   var labels = g.getLabels();
 
-  if (typeof(x) === 'undefined') {
-    if (g.getOption('legend') != 'always') {
-      return '';
-    }
-
-    sepLines = g.getOption('labelsSeparateLines');
-    html = '';
-    for (i = 1; i < labels.length; i++) {
-      var series = g.getPropertiesForSeries(labels[i]);
-      if (!series.visible) continue;
-
-      if (html !== '') html += (sepLines ? '<br/>' : ' ');
-      strokePattern = g.getOption("strokePattern", labels[i]);
-      dash = generateLegendDashHTML(strokePattern, series.color, oneEmWidth);
-      html += "<span style='font-weight: bold; color: " + series.color + ";'>" +
-          dash + " " + escapeHTML(labels[i]) + "</span>";
-    }
-    return html;
-  }
-
-  // TODO(danvk): remove this use of a private API
   var xOptView = g.optionsViewForAxis_('x');
   var xvf = xOptView('valueFormatter');
-  html = xvf.call(g, x, xOptView, labels[0], g, row, 0);
-  if (html !== '') {
-    html += ':';
-  }
 
   var yOptViews = [];
   var num_axes = g.numAxes();
@@ -266,25 +241,95 @@ Legend.generateLegendHTML = function(g, x, sel_points, oneEmWidth, row) {
     // TODO(danvk): remove this use of a private API
     yOptViews[i] = g.optionsViewForAxis_('y' + (i ? 1 + i : ''));
   }
+
+  sepLines = g.getOption('labelsSeparateLines');
   var showZeros = g.getOption("labelsShowZeroValues");
+
+  if (typeof(x) === 'undefined') {
+    if (g.getOption('legend') != 'always') {
+      return '';
+    }
+
+    // Alter so we have a blank line at the start of the legend if no point is highlighted now
+    // No jumping of the legend when he mouse moves over it.
+    html = xvf(g.getValue(g.numRows()-1, 0), xOptView, labels[0], g);
+//    sepLines = g.getOption('labelsSeparateLines');
+//    html = '';
+    for (i = 1; i < labels.length; i++) {
+      var series = g.getPropertiesForSeries(labels[i]);
+      if (!series.visible) continue;
+
+      var yOptView = yOptViews[series.axis - 1];
+      var fmtFunc = yOptView('valueFormatter');
+      var val = 'N/A';
+      var pt = g.getValue(g.numRows()-1, series.column);
+      if(pt != null)
+        val = fmtFunc(pt, yOptView, labels[i], g);
+
+      if (html !== '') html += (sepLines ? '<br/>' : ' ');
+      strokePattern = g.getOption("strokePattern", labels[i]);
+//      dash = generateLegendDashHTML(strokePattern, series.color, oneEmWidth);
+      html += "<span style='font-weight: bold; color: " + series.color + ";'>" +
+           escapeHTML(labels[i]) + ":&#160;" + val + "</span>";
+//      html += "<span style='font-weight: bold; color: " + series.color + ";'>" +
+//          dash + " " + escapeHTML(labels[i]) + "</span>";
+    }
+    return html;
+  }
+
+  // TODO(danvk): remove this use of a private API
+//  var xOptView = g.optionsViewForAxis_('x');
+//  var xvf = xOptView('valueFormatter');
+  html = xvf.call(g, x, xOptView, labels[0], g, row, 0);
+  if (html !== '') {
+    html += ':';
+  }
+
+//  var yOptViews = [];
+//  var num_axes = g.numAxes();
+//  for (i = 0; i < num_axes; i++) {
+    // TODO(danvk): remove this use of a private API
+//    yOptViews[i] = g.optionsViewForAxis_('y' + (i ? 1 + i : ''));
+//  }
+//  var showZeros = g.getOption("labelsShowZeroValues");
   sepLines = g.getOption("labelsSeparateLines");
   var highlightSeries = g.getHighlightSeries();
-  for (i = 0; i < sel_points.length; i++) {
-    var pt = sel_points[i];
-    if (pt.yval === 0 && !showZeros) continue;
-    if (!utils.isOK(pt.canvasy)) continue;
+  var pt = null;
+  var lb = null;
+  for (i = 1; i < labels.length; i++) {
+//  for (i = 0; i < sel_points.length; i++) {
+    lb = labels[i];
+    pt = null;
+    for (j = 0; j < sel_points.length; j++) {
+        if(sel_points[j].name === lb) {
+            pt = sel_points[j];
+            break;
+        }
+    }
+//    var pt = sel_points[i];
+    if (pt != null && pt.yval === 0 && !showZeros) continue;
+//    if (pt.yval === 0 && !showZeros) continue;
+//    if (!utils.isOK(pt.canvasy)) continue;
+
+    var series = g.getPropertiesForSeries(lb);
+    if (!series.visible) continue;
+
     if (sepLines) html += "<br/>";
 
-    var series = g.getPropertiesForSeries(pt.name);
+//    var series = g.getPropertiesForSeries(pt.name);
     var yOptView = yOptViews[series.axis - 1];
     var fmtFunc = yOptView('valueFormatter');
-    var yval = fmtFunc.call(g, pt.yval, yOptView, pt.name, g, row, labels.indexOf(pt.name));
+    var yval = 'N/A';
+    if(pt != null && utils.isOK(pt.canvasy))
+        yval = fmtFunc.call(g, pt.yval, yOptView, pt.name, g, row, labels.indexOf(pt.name));
 
-    var cls = (pt.name == highlightSeries) ? " class='highlight'" : "";
+//    var yval = fmtFunc.call(g, pt.yval, yOptView, pt.name, g, row, labels.indexOf(pt.name));
+
+    var cls = (pt != null && pt.name == highlightSeries) ? " class='highlight'" : "";
 
     // TODO(danvk): use a template string here and make it an attribute.
-    html += "<span" + cls + ">" + " <b><span style='color: " + series.color + ";'>" +
-        escapeHTML(pt.name) + "</span></b>:&#160;" + yval + "</span>";
+    html += "<span" + cls + ">" + " <span style='font-weight: bold; color: " + series.color + ";'>" +
+        escapeHTML(lb) + "</span>:&#160;" + yval + "</span>";
   }
   return html;
 };
